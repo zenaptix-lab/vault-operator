@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
-	api "github.com/coreos-inc/vault-operator/pkg/apis/vault/v1alpha1"
-	"github.com/coreos-inc/vault-operator/pkg/util/vaultutil"
+	api "github.com/coreos/vault-operator/pkg/apis/vault/v1alpha1"
+	"github.com/coreos/vault-operator/pkg/util/vaultutil"
 
 	etcdCRAPI "github.com/coreos/etcd-operator/pkg/apis/etcd/v1beta2"
 	etcdCRClient "github.com/coreos/etcd-operator/pkg/generated/clientset/versioned"
@@ -61,34 +61,69 @@ func EtcdPeerTLSSecretName(vaultName string) string {
 // waits for all of its members to be ready.
 func DeployEtcdCluster(etcdCRCli etcdCRClient.Interface, v *api.VaultService) error {
 	size := 3
-	etcdCluster := &etcdCRAPI.EtcdCluster{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       etcdCRAPI.EtcdClusterResourceKind,
-			APIVersion: etcdCRAPI.SchemeGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      EtcdNameForVault(v.Name),
-			Namespace: v.Namespace,
-			Labels:    LabelsForVault(v.Name),
-		},
-		Spec: etcdCRAPI.ClusterSpec{
-			Size: size,
-			TLS: &etcdCRAPI.TLSPolicy{
-				Static: &etcdCRAPI.StaticTLS{
-					Member: &etcdCRAPI.MemberSecret{
-						PeerSecret:   EtcdPeerTLSSecretName(v.Name),
-						ServerSecret: EtcdServerTLSSecretName(v.Name),
+	etcdCluster := &etcdCRAPI.EtcdCluster{}
+
+	if v.Spec.PersistentVolumeClaimSpec != nil { // If a PersistentVolumeClaimSpec is made in the vault manifest
+		etcdCluster = &etcdCRAPI.EtcdCluster{ // Deploy the etcd Cluster with the PVC spec
+			TypeMeta: metav1.TypeMeta{
+				Kind:       etcdCRAPI.EtcdClusterResourceKind,
+				APIVersion: etcdCRAPI.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      EtcdNameForVault(v.Name),
+				Namespace: v.Namespace,
+				Labels:    LabelsForVault(v.Name),
+			},
+			Spec: etcdCRAPI.ClusterSpec{
+				Size: size,
+				TLS: &etcdCRAPI.TLSPolicy{
+					Static: &etcdCRAPI.StaticTLS{
+						Member: &etcdCRAPI.MemberSecret{
+							PeerSecret:   EtcdPeerTLSSecretName(v.Name),
+							ServerSecret: EtcdServerTLSSecretName(v.Name),
+						},
+						OperatorSecret: EtcdClientTLSSecretName(v.Name),
 					},
-					OperatorSecret: EtcdClientTLSSecretName(v.Name),
+				},
+				Pod: &etcdCRAPI.PodPolicy{
+					EtcdEnv: []v1.EnvVar{{
+						Name:  "ETCD_AUTO_COMPACTION_RETENTION",
+						Value: "1",
+					}},
+					PersistentVolumeClaimSpec: v.Spec.PersistentVolumeClaimSpec,
 				},
 			},
-			Pod: &etcdCRAPI.PodPolicy{
-				EtcdEnv: []v1.EnvVar{{
-					Name:  "ETCD_AUTO_COMPACTION_RETENTION",
-					Value: "1",
-				}},
+		}
+	} else { // Otherwise, deploy default etcd cluster with no PVCs (ephemeral)
+		etcdCluster = &etcdCRAPI.EtcdCluster{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       etcdCRAPI.EtcdClusterResourceKind,
+				APIVersion: etcdCRAPI.SchemeGroupVersion.String(),
 			},
-		},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      EtcdNameForVault(v.Name),
+				Namespace: v.Namespace,
+				Labels:    LabelsForVault(v.Name),
+			},
+			Spec: etcdCRAPI.ClusterSpec{
+				Size: size,
+				TLS: &etcdCRAPI.TLSPolicy{
+					Static: &etcdCRAPI.StaticTLS{
+						Member: &etcdCRAPI.MemberSecret{
+							PeerSecret:   EtcdPeerTLSSecretName(v.Name),
+							ServerSecret: EtcdServerTLSSecretName(v.Name),
+						},
+						OperatorSecret: EtcdClientTLSSecretName(v.Name),
+					},
+				},
+				Pod: &etcdCRAPI.PodPolicy{
+					EtcdEnv: []v1.EnvVar{{
+						Name:  "ETCD_AUTO_COMPACTION_RETENTION",
+						Value: "1",
+					}},
+				},
+			},
+		}
 	}
 	if v.Spec.Pod != nil {
 		etcdCluster.Spec.Pod.Resources = v.Spec.Pod.Resources

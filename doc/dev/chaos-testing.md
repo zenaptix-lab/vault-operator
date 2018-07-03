@@ -9,7 +9,7 @@ The operator can fail and restart at any point during the upgrade process. Upon 
 
 To test this behavior, failure points can be injected in the upgrade path at which the operator will fail with some specified probability.
 
-The [chaos branch](https://github.com/coreos-inc/vault-operator/commit/e37eccf73bbed6f6736cfb42b58831233ba7463f) does this by causing the operator to fail at the following stages during the upgrade:
+The [chaos branch](https://github.com/coreos/vault-operator/commit/e37eccf73bbed6f6736cfb42b58831233ba7463f) does this by causing the operator to fail at the following stages during the upgrade:
 - Before upgrading the vault nodes
 - After upgrading but before triggering the stepdown for the active node
 - After triggering the stepdown
@@ -25,7 +25,7 @@ For this example the namespace `chaos` will be used. The RBAC rules and the pull
 $ kubectl -n chaos create -f https://raw.githubusercontent.com/coreos/etcd-operator/master/example/deployment.yaml
 ```
 
-The vault-operator [chaos deployment][chaos-deployment] uses an image built from the [chaos branch](https://github.com/coreos-inc/vault-operator/commit/e37eccf73bbed6f6736cfb42b58831233ba7463f).
+The vault-operator [chaos deployment][chaos-deployment] uses an image built from the [chaos branch](https://github.com/coreos/vault-operator/commit/e37eccf73bbed6f6736cfb42b58831233ba7463f).
 
 ```
 $ kubectl -n chaos create -f example/chaos/chaos-deployment.yaml
